@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSM 状态读写融合进 chunk fwd_h（原地更新）</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="target_verify_去_conv_states_全池_clone.html">← target_verify 去 conv_…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="cute_dsl_手写_gdn_decode_kernel.html">CuTe DSL 手写 GDN decod… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>SSM 状态读写融合进 chunk fwd_h（原地更新）</h1>
+    <div class="chips">
+      <span class="chip stage">递推/状态</span>
+      <span class="chip plat">通用</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">删冗余拷贝 / 去 host 同步</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe on">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>Chunked prefill + prefix cache 场景下，每个 chunk 结束都要持久化 SSM 状态；而 kernel 反正要在 epilogue 里把 <code>b_h</code> 寄存器块写显存，写到"池里的原位置"和写到"临时张量"代价相同——搬运本身可以被 kernel 的必要写出吸收。这是把内存管理语义（gather/scatter）下沉进计算 kernel 的典型做法。KDA（Kimi）路径同步适配。</p>
+<p>HIP / Qwen3.5 上 chunk 流水的另一头也在收 launch：<code>T &gt;= 64</code> 时把 <code>chunk_local_cumsum + chunk_scaled_dot_kkt</code> 融成 <code>fused_cumsum_kkt</code>，<code>solve_tril</code> 换成 16×16 分块 <code>solve_tril_16x16_kernel</code>，再和 <code>fused_merge_recompute</code> 一起把 stage-one 从 4 个 kernel 压到 3 个。中间量 A 少一次完整读写。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>每层每 chunk 省：一次 h0 gather 拷贝 + 一次 final_state 分配 + 一次 scatter 写回（约 3× 状态大小的带宽 + 2 次 kernel launch）。收益随 batch、GDN 层数、chunk 数线性放大。</li><li>HIP 长序列 prefill 上，chunk stage-one 少一次 kernel 和一轮中间张量往返。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>Kernel 现在对全局状态池做原地读写，<strong>别名与生命周期约束外移</strong>：调用方必须保证同一槽位不会在同一 forward 中被两个序列引用，prefix cache 复制状态时也必须与该语义配合（后续 <a href="修_prefix_cache_复用时_kv_vk_slot_layout_失步.html">修 prefix-cache 复用时 KV/VK slot_layout 失步</a> 属于同一类状态池一致性问题）。</li><li>接口签名变化（<code>output_final_state</code> → <code>initial_state_indices</code>，不再返回 final_state），所有调用方（含 KDA）需同步迁移；与上游 FLA 库的接口分叉，rebase 成本增加。</li><li>h0 由 gather 后的连续内存变为按 index 间接寻址，kernel 内多一次索引 load，可忽略。</li><li><code>fused_cumsum_kkt</code> 只在 <code>T &gt;= 64</code> 启用，短序列走旧路径，同一模型两条 chunk 流水。</li><li><code>solve_tril</code> 的 16×16 分块 + merge 是精度敏感区：下三角求逆的数值稳定性跟着分块走，HIP 路径必须做端到端精度回归。</li></ul></div></section>
+      <div class="pager"><a href="target_verify_去_conv_states_全池_clone.html"><div class="lbl">上一篇</div><div class="ttl">target_verify 去 conv_states 全池 clone</div></a><a class="right" href="cute_dsl_手写_gdn_decode_kernel.html"><div class="lbl">下一篇</div><div class="ttl">CuTe DSL 手写 GDN decode kernel</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

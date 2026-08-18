@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>b.sigmoid+gdn_gating+unsqueeze 三合一（e2e ≤0.85%）</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="causal_conv1d_triton_kernel_去_host_映射.html">← causal_conv1d Triton …</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="conv1d_cuda_kernel_用负索引取_stride.html">conv1d CUDA kernel 用负… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>b.sigmoid+gdn_gating+unsqueeze 三合一（e2e ≤0.85%）</h1>
+    <div class="chips">
+      <span class="chip stage">gating</span>
+      <span class="chip plat">通用</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">算子融合减少 launch</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe on">gating</span><span class="pipe-arrow">→</span><span class="pipe">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>GDN decode 是典型的小 kernel 长链条：每层几十个微小算子，launch-bound。凡是形状为 <code>[bs, heads]</code> 级别的逐元素计算，融合的收益 ≈ 省掉的 launch 次数。这两个门控在数学上无依赖交叉（都只读投影输出 a/b 和常量参数），融合无正确性风险。</p>
+<p>HIP / Qwen3.5 上同一思路有 prefill 形状版：<code>fused_gdn_gating_and_sigmoid</code> 一次算出 g 和 beta。同批还把两次独立的 <code>l2norm_fwd</code> 收成 <code>fused_l2norm_qk</code>，一个 kernel 同时归一化 q 和 k。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>端到端最多 <strong>0.85%</strong> 提升（decode 场景，单算子层面省 2 次 kernel launch × 每 token × 48 层 GDN）。</li><li>HIP prefill 门控同样 2 次 launch → 1 次；q/k L2 norm 少一次 launch。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>Kernel 假设 a/b 连续布局（offset 用 <code>i_b * seq_len * NUM_HEADS</code> 计算）。后来 Qwen3.5 引入 fused projection 之后 a/b 变成 strided split view，这个隐含假设导致 gating 读错内存、精度损坏，由 <a href="stride_aware_kernel_重启投影融合.html">stride-aware kernel 重启投影融合</a> 加 stride 参数修复——是本融合的直接技术债。</li><li>g/beta 输出固定为 fp32 / 输入 dtype，与原实现一致，无精度损失。</li><li>HIP 的 prefill gating / <code>fused_l2norm_qk</code> 与 CUDA Triton 路径分叉，两套数值实现要各自回归。</li></ul></div></section>
+      <div class="pager"><a href="causal_conv1d_triton_kernel_去_host_映射.html"><div class="lbl">上一篇</div><div class="ttl">causal_conv1d Triton kernel 去 host 映射（≤9%）</div></a><a class="right" href="conv1d_cuda_kernel_用负索引取_stride.html"><div class="lbl">下一篇</div><div class="ttl">conv1d CUDA kernel 用负索引取 stride（布局无关化）</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

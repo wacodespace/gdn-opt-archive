@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTP verify 后 mamba 状态回写向量化（10x，e2e ≤3.54%）</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><span class="btn ghost is-disabled">← 最早</span><a class="btn" href="index.html">总览</a><a class="btn ghost" href="prefill_conv1d_切换到_sgl_kernel_cuda_实现.html">prefill conv1d 切换到 sg… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>MTP verify 后 mamba 状态回写向量化（10x，e2e ≤3.54%）</h1>
+    <div class="chips">
+      <span class="chip stage">状态回写</span>
+      <span class="chip plat">通用</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">删冗余拷贝 / 去 host 同步</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe on">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>Qwen3-Next + MTP 投机解码场景。verify 后状态回写在每个 decode step 都执行，batch 越大旧实现的 <code>.item</code> 同步风暴越严重。可以这样优化是因为该操作本质就是"按索引对成对 (line, step) 做批量拷贝"，天然可向量化，逐元素循环只是初版实现的偷懒写法。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li><code>update_mamba_state_after_mtp_verify</code> 算子提速 <strong>10x</strong>。</li><li>端到端最多 <strong>3.54%</strong> 提升（投机解码 decode 场景）。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>去掉了 per-element 处理后，fancy-indexing scatter 会为索引产生临时张量（gather 出的中间结果），显存瞬时占用略增；这正是后来用 Triton kernel 消除"隐形拷贝"的伏笔（见 <a href="triton_track_kernel_消除状态回写隐形拷贝气泡.html">Triton track kernel 消除状态回写隐形拷贝气泡</a>）。</li><li><code>valid_mask</code> 过滤仍然保留，语义不变，无精度风险。</li></ul></div></section>
+      <div class="pager"><div></div><a class="right" href="prefill_conv1d_切换到_sgl_kernel_cuda_实现.html"><div class="lbl">下一篇</div><div class="ttl">prefill conv1d 切换到 sgl-kernel CUDA 实现</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

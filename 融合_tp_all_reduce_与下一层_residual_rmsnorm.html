@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>融合 TP all-reduce 与下一层 residual RMSNorm</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="hip_inline_asm_decode_kernel_vk_kv_惰性布局切换.html">← HIP inline-ASM decode…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="gdn_双投影_alt_stream_并发_去_shared_expert_clone.html">GDN 双投影 alt-stream 并发… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>融合 TP all-reduce 与下一层 residual RMSNorm</h1>
+    <div class="chips">
+      <span class="chip stage">TP 通信边界</span>
+      <span class="chip plat">HIP</span>
+    </div>
+    
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe">递推</span><span class="pipe-arrow">→</span><span class="pipe on">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>Qwen3.5 在 MI308 上做 TP 部署时，逐层的 all-reduce→add→norm 序列在 decode 关键路径上重复 N 层，通信与归一化各自 launch 拖累延迟。aiter 提供了融合 AR+RMS 的 custom kernel，直接接入即可。该改动曾被 revert 后又重新合入，说明稳定性经过反复。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>ROCm 上 Qwen3.5 decode 每层省两次 launch + 一次 residual 往返；通信与归一化重叠。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>有严格的启用条件（hidden ≤ 16384、字节阈值、world_size ≠ 6），超出走 fallback——大 hidden / 特定并行度不受益。</li><li>依赖 aiter custom all-reduce 且需 <code>should_custom_ar</code> 判定可用，否则回退；ROCm-only。</li><li>1-stage/2-stage 阈值与 <code>AITER_AR_1STAGE</code> env 覆盖引入调参面；阈值选错会让中等消息尺寸走次优路径。</li><li>曾被 revert 一次，该融合与部分配置不兼容。</li></ul></div></section>
+      <div class="pager"><a href="hip_inline_asm_decode_kernel_vk_kv_惰性布局切换.html"><div class="lbl">上一篇</div><div class="ttl">HIP inline-ASM decode kernel + VK/KV 惰性布局切换</div></a><a class="right" href="gdn_双投影_alt_stream_并发_去_shared_expert_clone.html"><div class="lbl">下一篇</div><div class="ttl">GDN 双投影 alt-stream 并发 + 去 shared expert clone</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

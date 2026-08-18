@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HIP inline-ASM decode kernel + VK/KV 惰性布局切换</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="stride_aware_kernel_重启投影融合.html">← stride-aware kernel 重…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="融合_tp_all_reduce_与下一层_residual_rmsnorm.html">融合 TP all-reduce 与下一层… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>HIP inline-ASM decode kernel + VK/KV 惰性布局切换</h1>
+    <div class="chips">
+      <span class="chip stage">decode 递推</span>
+      <span class="chip plat">HIP</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">手写高性能 decode kernel</span><span class="chip">状态布局与一致性</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe on">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>MI308 上 Qwen3.5 decode 的 GDN 递推是显性瓶颈，Triton/FLA 路径带宽利用率不足。aiter 提供了汇编级 kernel 但布局要求与现有 prefill 生态冲突，直接全局换布局要重写全部 prefill kernel；per-slot 惰性转置把布局差异隔离在 prefill↔decode 边界，转置成本只在模式切换时支付一次，被后续多个 decode step 摊销。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>Decode GDN 算子达到 ASM 级带宽效率；48 层的转置合并为单次批量 kernel；每 chunk 省 47 次 compare launch。加载失败自动回退 Triton 路径（try/except），无部署风险。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li><strong>状态一致性复杂度是最大代价</strong>：<code>slot_layout</code> 位图必须与所有会移动/复制 SSM 状态的路径（mamba prefix-cache 复用、槽位迁移）保持同步——后来实际发生了失步导致 linear-attn 精度损坏，由 <a href="修_prefix_cache_复用时_kv_vk_slot_layout_失步.html">修 prefix-cache 复用时 KV/VK slot_layout 失步</a> 修复。这类 bug 静默且难查。</li><li>Prefill/decode 交替频繁的负载（chunked prefill 混合 decode）会反复支付双向转置带宽。</li><li>依赖 aiter 版本与 GPU 架构的 ASM kernel，可移植性与可调试性差；ROCm-only。</li><li><code>A_log.float</code> 每层每步一次小转换（kernel 接口要求 fp32），微小额外开销。</li></ul></div></section>
+      <div class="pager"><a href="stride_aware_kernel_重启投影融合.html"><div class="lbl">上一篇</div><div class="ttl">stride-aware kernel 重启投影融合</div></a><a class="right" href="融合_tp_all_reduce_与下一层_residual_rmsnorm.html"><div class="lbl">下一篇</div><div class="ttl">融合 TP all-reduce 与下一层 residual RMSNorm</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

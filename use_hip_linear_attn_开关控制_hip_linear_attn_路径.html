@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USE_HIP_LINEAR_ATTN 开关控制 HIP linear attn 路径</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="gdn_双投影_alt_stream_并发_去_shared_expert_clone.html">← GDN 双投影 alt-stream 并发…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="修_prefix_cache_复用时_kv_vk_slot_layout_失步.html">修 prefix-cache 复用时 KV… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>USE_HIP_LINEAR_ATTN 开关控制 HIP linear attn 路径</h1>
+    <div class="chips">
+      <span class="chip stage">运维开关</span>
+      <span class="chip plat">HIP</span>
+    </div>
+    
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>HIP 把 Qwen3-Next 上的 GDN 融合搬到 Qwen3.5 时，用 <code>_is_hip</code> 拆出了整条专属路径：conv 写出直接 split qkv、prefill gating 融合、chunk stage-one 三合一、以及按 CDNA 重调的 tile。ROCm 因此提速，同时也把 CUDA / HIP 做成两套数值实现，后来 HIP 路径出过精度问题。需要一个安全阀：生产环境遇到 HIP 路径异常时立刻降级，而不必等修复合入。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>不贡献吞吐。价值是把 HIP 激进融合的上线风险从"改代码回滚"变成"关一个环境变量"。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>测试矩阵从一条路径变成开 / 关两条，都要覆盖。</li><li>开关默认开 HIP；精度问题出现时，回退方式是关掉开关，而不是改 kernel。</li></ul></div></section>
+      <div class="pager"><a href="gdn_双投影_alt_stream_并发_去_shared_expert_clone.html"><div class="lbl">上一篇</div><div class="ttl">GDN 双投影 alt-stream 并发 + 去 shared expert clone</div></a><a class="right" href="修_prefix_cache_复用时_kv_vk_slot_layout_失步.html"><div class="lbl">下一篇</div><div class="ttl">修 prefix-cache 复用时 KV/VK slot_layout 失步</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

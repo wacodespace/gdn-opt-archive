@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GDN 优化归档</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><span class="crumb">19 条优化 · 背景 / 收益 / Trade-off</span></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">Gated DeltaNet · 优化归档</div>
+    <h1>GDN 优化时间线</h1>
+    <p class="lede">本目录整理与 GDN / linear-attention / Mamba SSM 状态相关的优化。
+    每条只保留三件事：背景、好处与收益、trade-off。</p>
+    <div class="pipeline"><span class="pipe on">in_proj</span><span class="pipe-arrow">→</span><span class="pipe on">conv1d</span><span class="pipe-arrow">→</span><span class="pipe on">gating</span><span class="pipe-arrow">→</span><span class="pipe on">递推</span><span class="pipe-arrow">→</span><span class="pipe on">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe on">out_proj</span></div>
+    <p class="lede" style="margin-top:10px">前向链条：
+    <code>in_proj (qkv/z/b/a GEMM)</code> → <code>causal_conv1d(+split qkv)</code> →
+    <code>gating</code> → <code>delta-rule 递推</code> → <code>gated RMSNorm</code> → <code>out_proj</code>。
+    多数优化落在其中某一环。</p>
+  </div>
+
+  <div class="page-h2">时间线总览 · 19 条</div>
+  <div class="filters"><span class="filter on" data-group="stage" data-val="all">全部环节</span><span class="filter" data-group="stage" data-val="状态回写">状态回写</span><span class="filter" data-group="stage" data-val="conv1d">conv1d</span><span class="filter" data-group="stage" data-val="gating">gating</span><span class="filter" data-group="stage" data-val="conv1d/verify">conv1d/verify</span><span class="filter" data-group="stage" data-val="verify">verify</span><span class="filter" data-group="stage" data-val="递推/状态">递推/状态</span><span class="filter" data-group="stage" data-val="decode 递推">decode 递推</span><span class="filter" data-group="stage" data-val="MoE 门控">MoE 门控</span><span class="filter" data-group="stage" data-val="in_proj">in_proj</span><span class="filter" data-group="stage" data-val="in_proj/gating">in_proj/gating</span><span class="filter" data-group="stage" data-val="TP 通信边界">TP 通信边界</span><span class="filter" data-group="stage" data-val="运维开关">运维开关</span><span class="filter" data-group="stage" data-val="状态一致性">状态一致性</span></div>
+  <div class="filters"><span class="filter on" data-group="plat" data-val="all">全部平台</span><span class="filter" data-group="plat" data-val="通用">通用</span><span class="filter" data-group="plat" data-val="CUDA">CUDA</span><span class="filter" data-group="plat" data-val="HIP">HIP</span></div>
+  <div class="tl-head"><span>优化</span><span>环节</span><span>平台</span></div>
+  <div class="tl"><a class="tl-row" href="mtp_verify_后_mamba_状态回写向量化.html" data-stage="状态回写" data-plat="通用"><span class="tl-title">MTP verify 后 mamba 状态回写向量化（10x，e2e ≤3.54%）</span><span class="tl-stage">状态回写</span><span class="tl-plat">通用</span></a><a class="tl-row" href="prefill_conv1d_切换到_sgl_kernel_cuda_实现.html" data-stage="conv1d" data-plat="CUDA"><span class="tl-title">prefill conv1d 切换到 sgl-kernel CUDA 实现</span><span class="tl-stage">conv1d</span><span class="tl-plat">CUDA</span></a><a class="tl-row" href="causal_conv1d_triton_kernel_去_host_映射.html" data-stage="conv1d" data-plat="通用"><span class="tl-title">causal_conv1d Triton kernel 去 host 映射（≤9%）</span><span class="tl-stage">conv1d</span><span class="tl-plat">通用</span></a><a class="tl-row" href="b_sigmoid_gdn_gating_unsqueeze_三合一.html" data-stage="gating" data-plat="通用"><span class="tl-title">b.sigmoid+gdn_gating+unsqueeze 三合一（e2e ≤0.85%）</span><span class="tl-stage">gating</span><span class="tl-plat">通用</span></a><a class="tl-row" href="conv1d_cuda_kernel_用负索引取_stride.html" data-stage="conv1d" data-plat="CUDA"><span class="tl-title">conv1d CUDA kernel 用负索引取 stride（布局无关化）</span><span class="tl-stage">conv1d</span><span class="tl-plat">CUDA</span></a><a class="tl-row" href="target_verify_去两次_contiguous.html" data-stage="conv1d/verify" data-plat="通用"><span class="tl-title">target_verify 去两次 contiguous()</span><span class="tl-stage">conv1d/verify</span><span class="tl-plat">通用</span></a><a class="tl-row" href="target_verify_去_conv_states_全池_clone.html" data-stage="verify" data-plat="通用"><span class="tl-title">target_verify 去 conv_states 全池 clone</span><span class="tl-stage">verify</span><span class="tl-plat">通用</span></a><a class="tl-row" href="ssm_状态读写融合进_chunk_fwd_h.html" data-stage="递推/状态" data-plat="通用"><span class="tl-title">SSM 状态读写融合进 chunk fwd_h（原地更新）</span><span class="tl-stage">递推/状态</span><span class="tl-plat">通用</span></a><a class="tl-row" href="cute_dsl_手写_gdn_decode_kernel.html" data-stage="decode 递推" data-plat="CUDA"><span class="tl-title">CuTe DSL 手写 GDN decode kernel</span><span class="tl-stage">decode 递推</span><span class="tl-plat">CUDA</span></a><a class="tl-row" href="fused_recurrent_decode_bv_8to32_调优.html" data-stage="decode 递推" data-plat="通用"><span class="tl-title">fused_recurrent decode BV 8→32 调优</span><span class="tl-stage">decode 递推</span><span class="tl-plat">通用</span></a><a class="tl-row" href="shared_expert_门控_sigmoid_mul_广播融合.html" data-stage="MoE 门控" data-plat="HIP"><span class="tl-title">shared expert 门控 sigmoid×mul 广播融合</span><span class="tl-stage">MoE 门控</span><span class="tl-plat">HIP</span></a><a class="tl-row" href="gdn_四路输入投影融合为单_gemm.html" data-stage="in_proj" data-plat="HIP"><span class="tl-title">GDN 四路输入投影融合为单 GEMM（qkv/z/b/a）</span><span class="tl-stage">in_proj</span><span class="tl-plat">HIP</span></a><a class="tl-row" href="stride_aware_kernel_重启投影融合.html" data-stage="in_proj/gating" data-plat="HIP"><span class="tl-title">stride-aware kernel 重启投影融合</span><span class="tl-stage">in_proj/gating</span><span class="tl-plat">HIP</span></a><a class="tl-row" href="hip_inline_asm_decode_kernel_vk_kv_惰性布局切换.html" data-stage="decode 递推" data-plat="HIP"><span class="tl-title">HIP inline-ASM decode kernel + VK/KV 惰性布局切换</span><span class="tl-stage">decode 递推</span><span class="tl-plat">HIP</span></a><a class="tl-row" href="融合_tp_all_reduce_与下一层_residual_rmsnorm.html" data-stage="TP 通信边界" data-plat="HIP"><span class="tl-title">融合 TP all-reduce 与下一层 residual RMSNorm</span><span class="tl-stage">TP 通信边界</span><span class="tl-plat">HIP</span></a><a class="tl-row" href="gdn_双投影_alt_stream_并发_去_shared_expert_clone.html" data-stage="in_proj" data-plat="CUDA/HIP"><span class="tl-title">GDN 双投影 alt-stream 并发 + 去 shared expert clone</span><span class="tl-stage">in_proj</span><span class="tl-plat">CUDA/HIP</span></a><a class="tl-row" href="use_hip_linear_attn_开关控制_hip_linear_attn_路径.html" data-stage="运维开关" data-plat="HIP"><span class="tl-title">USE_HIP_LINEAR_ATTN 开关控制 HIP linear attn 路径</span><span class="tl-stage">运维开关</span><span class="tl-plat">HIP</span></a><a class="tl-row" href="修_prefix_cache_复用时_kv_vk_slot_layout_失步.html" data-stage="状态一致性" data-plat="HIP"><span class="tl-title">修 prefix-cache 复用时 KV/VK slot_layout 失步</span><span class="tl-stage">状态一致性</span><span class="tl-plat">HIP</span></a><a class="tl-row" href="triton_track_kernel_消除状态回写隐形拷贝气泡.html" data-stage="状态回写" data-plat="HIP 主"><span class="tl-title">Triton track kernel 消除状态回写隐形拷贝气泡</span><span class="tl-stage">状态回写</span><span class="tl-plat">HIP 主</span></a></div>
+
+  <div class="page-h2">优化脉络 · 四条主线</div>
+  <div class="threads"><div class="thread"><h3>1. 删冗余拷贝 / 去 host 同步</h3><p>把逐元素 Python 循环、防御性 clone/contiguous、以及 .item() / torch.any / 隐式 reshape 造成的 device↔host 同步和多余带宽逐步消灭。</p><div class="chain"><a href="mtp_verify_后_mamba_状态回写向量化.html">MTP verify 后 mamba 状态回写向量化（10x，e2e ≤3.54%）</a><a href="target_verify_去两次_contiguous.html">target_verify 去两次 contiguous()</a><a href="target_verify_去_conv_states_全池_clone.html">target_verify 去 conv_states 全池 clone</a><a href="ssm_状态读写融合进_chunk_fwd_h.html">SSM 状态读写融合进 chunk fwd_h（原地更新）</a><a href="triton_track_kernel_消除状态回写隐形拷贝气泡.html">Triton track kernel 消除状态回写隐形拷贝气泡</a></div></div><div class="thread"><h3>2. 算子融合减少 launch</h3><p>从 gating 三合一（HIP 上还有 prefill 形状版），到 MoE 门控、投影 GEMM 融合；conv 写出直接 split qkv、chunk stage-one 三合一分别写在 conv1d / chunk 状态那两篇。双流并发是融合的替代思路。</p><div class="chain"><a href="b_sigmoid_gdn_gating_unsqueeze_三合一.html">b.sigmoid+gdn_gating+unsqueeze 三合一（e2e ≤0.85%）</a><a href="shared_expert_门控_sigmoid_mul_广播融合.html">shared expert 门控 sigmoid×mul 广播融合</a><a href="gdn_四路输入投影融合为单_gemm.html">GDN 四路输入投影融合为单 GEMM（qkv/z/b/a）</a><a href="stride_aware_kernel_重启投影融合.html">stride-aware kernel 重启投影融合</a><a href="gdn_双投影_alt_stream_并发_去_shared_expert_clone.html">GDN 双投影 alt-stream 并发 + 去 shared expert clone</a></div></div><div class="thread"><h3>3. 手写高性能 decode kernel</h3><p>CUDA 侧 CuTe DSL 与 HIP 侧 inline ASM 是两个平台各自的 decode 递推终极优化，并伴随 BV / autotune 调参。</p><div class="chain"><a href="cute_dsl_手写_gdn_decode_kernel.html">CuTe DSL 手写 GDN decode kernel</a><a href="hip_inline_asm_decode_kernel_vk_kv_惰性布局切换.html">HIP inline-ASM decode kernel + VK/KV 惰性布局切换</a><a href="fused_recurrent_decode_bv_8to32_调优.html">fused_recurrent decode BV 8→32 调优</a></div></div><div class="thread"><h3>4. 状态布局与一致性</h3><p>stride 解耦 → VK/KV 双布局 → 布局位图下沉进池。高性能布局的代价是状态一致性复杂度。</p><div class="chain"><a href="conv1d_cuda_kernel_用负索引取_stride.html">conv1d CUDA kernel 用负索引取 stride（布局无关化）</a><a href="hip_inline_asm_decode_kernel_vk_kv_惰性布局切换.html">HIP inline-ASM decode kernel + VK/KV 惰性布局切换</a><a href="修_prefix_cache_复用时_kv_vk_slot_layout_失步.html">修 prefix-cache 复用时 KV/VK slot_layout 失步</a></div></div></div>
+
+  <div class="page-h2">反复出现的 Trade-off 主题</div>
+  <div class="trade-list"><div class="trade-item"><h3>CUDA/HIP 双路径分叉</h3><p>把 Qwen3-Next 的 GDN 优化搬到 Qwen3.5，用 _is_hip 给 HIP 单独一套 kernel，换来 ROCm 上的 prefill/decode 提速。代价是两套数值路径、测试矩阵翻倍；HIP 路径后来出过精度问题，只能加 fallback。</p></div><div class="trade-item"><h3>优化引入的技术债</h3><p>投影融合把 4 路 GEMM 收成 1 路，但融合输出是 strided 视图，下游 gating 按连续布局读就会算错。VK/KV 双布局让 HIP ASM decode 吃满带宽，布局元数据和状态搬运一旦失步就会静默损坏精度。高性能把正确性护栏从代码内移到了调用契约。</p></div><div class="trade-item"><h3>kernel 变体增殖</h3><p>split_reshape_cat 从交错版 → contiguous 版 → v3（v_per_group=3），选择逻辑越来越复杂。</p></div><div class="trade-item"><h3>平台/形状条件启用</h3><p>多数融合有 T&gt;=64、hidden 阈值、head_dim==128 等启用门槛，短序列/异形状走 fallback，行为分叉。</p></div></div>
+</div>
+
+<script>
+
+(function () {
+  const filters = [...document.querySelectorAll('.filter')];
+  const rows = [...document.querySelectorAll('.tl-row')];
+  let stage = 'all', plat = 'all';
+  function apply() {
+    rows.forEach(r => {
+      const okS = stage === 'all' || r.dataset.stage === stage;
+      const okP = plat === 'all' || r.dataset.plat.indexOf(plat) !== -1;
+      r.classList.toggle('hide', !(okS && okP));
+    });
+  }
+  filters.forEach(f => {
+    f.addEventListener('click', () => {
+      const group = f.dataset.group;
+      const val = f.dataset.val;
+      if (group === 'stage') stage = val;
+      if (group === 'plat') plat = val;
+      filters.filter(x => x.dataset.group === group).forEach(x => x.classList.toggle('on', x === f));
+      apply();
+    });
+  });
+})();
+
+</script>
+</body>
+</html>

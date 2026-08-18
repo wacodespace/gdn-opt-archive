@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>prefill conv1d 切换到 sgl-kernel CUDA 实现</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="mtp_verify_后_mamba_状态回写向量化.html">← MTP verify 后 mamba 状态…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="causal_conv1d_triton_kernel_去_host_映射.html">causal_conv1d Triton … →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>prefill conv1d 切换到 sgl-kernel CUDA 实现</h1>
+    <div class="chips">
+      <span class="chip stage">conv1d</span>
+      <span class="chip plat">CUDA</span>
+    </div>
+    
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe on">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>Qwen3-Next 上线初期，GDN prefill 的 profile 中 conv1d 占比偏高。sgl-kernel 中已经存在成熟的 CUDA causal_conv1d（供 Mamba2 类模型使用），支持 varlen + 连续批处理 + initial state，功能上完全覆盖 GDN prefill 的需求，因此可以零风险替换调用点（decode 的 <code>causal_conv1d_update</code> 路径不变）。</p>
+<p>sgl-kernel 这条 CUDA 路径后来被明确限制为 CUDA-only。HIP / Qwen3.5 上的对应优化不是再换一套 conv 实现，而是把 conv 的写出和后面的 <code>torch.split</code> 收进同一个 kernel：decode 用 <code>causal_conv1d_update_split_qkv</code>，prefill varlen 用 <code>causal_conv1d_fn_split_qkv</code>（同时吸收原来的 <code>transpose(0,1)</code>）。旧路径 conv 后再 split q/k/v，会多三次拷贝。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>Prefill 阶段 conv1d 算子耗时下降。</li><li>消除了 Triton 路径每次调用的 host 侧 seqlens 计算与 <code>batch_ptr</code> H2D 拷贝。</li><li>HIP 路径上，decode 每层少三次 qkv split 拷贝；prefill 的 split 与输出重排不再单独物化。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>引入对 sgl-kernel CUDA 算子的依赖，非 CUDA 平台（ROCm/CPU/NPU）不能走该路径（后续改动明确将 sgl-kernel conv1d 限制为 CUDA-only）。</li><li>双实现并存（Triton 版仍被 target_verify/decode 等路径使用），维护面变大：两个实现的语义（pad_slot_id、initial state 处理）必须保持一致。</li><li>HIP 再加一套 <code>*_split_qkv</code> kernel，CUDA sgl-kernel / Triton / HIP split 三条路径的 pad_slot、initial state、输出布局必须对齐；语义漂移会静默写错 q/k/v。</li></ul></div></section>
+      <div class="pager"><a href="mtp_verify_后_mamba_状态回写向量化.html"><div class="lbl">上一篇</div><div class="ttl">MTP verify 后 mamba 状态回写向量化（10x，e2e ≤3.54%）</div></a><a class="right" href="causal_conv1d_triton_kernel_去_host_映射.html"><div class="lbl">下一篇</div><div class="ttl">causal_conv1d Triton kernel 去 host 映射（≤9%）</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

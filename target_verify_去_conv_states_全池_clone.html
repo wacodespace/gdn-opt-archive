@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>target_verify 去 conv_states 全池 clone</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="target_verify_去两次_contiguous.html">← target_verify 去两次 con…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="ssm_状态读写融合进_chunk_fwd_h.html">SSM 状态读写融合进 chunk fwd… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>target_verify 去 conv_states 全池 clone</h1>
+    <div class="chips">
+      <span class="chip stage">verify</span>
+      <span class="chip plat">通用</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">删冗余拷贝 / 去 host 同步</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe on">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>MTP 投机解码 decode 场景。conv 状态池大小 = <code>num_layers × max_slots × dim × (width-1)</code>，与 batch 无关，池越大（并发越高）clone 的固定成本越高——这是一个随部署规模恶化的 O(pool) 开销挂在 O(batch) 的路径上。确认框架层的 accepted-state 回写机制后即可安全删除。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>每层每 verify step 省一次全池分配 + 全池拷贝；显存峰值同时下降一个 conv 池的大小。与 <a href="target_verify_去两次_contiguous.html">target_verify 去两次 contiguous</a> 同批落地，共同降低 verify 开销。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>正确性从"物理隔离"变为依赖投机解码框架的状态回写协议：verify 必须把被接受 token 的 conv 状态回写到正式池，否则后续 decode 会被污染。需要配套回归测试。</li></ul></div></section>
+      <div class="pager"><a href="target_verify_去两次_contiguous.html"><div class="lbl">上一篇</div><div class="ttl">target_verify 去两次 contiguous()</div></a><a class="right" href="ssm_状态读写融合进_chunk_fwd_h.html"><div class="lbl">下一篇</div><div class="ttl">SSM 状态读写融合进 chunk fwd_h（原地更新）</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

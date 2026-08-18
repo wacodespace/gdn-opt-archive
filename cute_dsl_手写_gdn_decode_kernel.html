@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CuTe DSL 手写 GDN decode kernel</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="ssm_状态读写融合进_chunk_fwd_h.html">← SSM 状态读写融合进 chunk fwd…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="fused_recurrent_decode_bv_8to32_调优.html">fused_recurrent decod… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>CuTe DSL 手写 GDN decode kernel</h1>
+    <div class="chips">
+      <span class="chip stage">decode 递推</span>
+      <span class="chip plat">CUDA</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">手写高性能 decode kernel</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe on">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>Qwen3-Next/Qwen3.5 decode 的瓶颈层之一就是 GDN 递推。Triton 版受限于编译器的调度能力（无法显式控制 cp.async 流水与 warp 布局），带宽利用率不满。CuTe DSL 提供接近 CUDA C++ 的控制力但保留 Python JIT 分发的灵活性，适合放进 <code>jit_kernel</code> 体系。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>Decode GDN 算子层面优于 Triton fused_recurrent 路径（配套 benchmark 见 <code>bench_cutedsl_gdn</code>）。小 batch 场景受益于 SM 占用改善尤其明显。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li><strong>平台窄</strong>：依赖 CUTLASS DSL + Hopper 级特性（cp.async），CUDA-only，ROCm/老架构不可用；默认关闭需 env 开启。</li><li><strong>JIT 首编译延迟</strong>：首个请求触发编译，冷启动毛刺；按形状缓存意味着 batch 形状多样时编译多次。</li><li><strong>维护成本高</strong>：1500 行手写 kernel，后续布局改动（如 K-last/VK 布局）都要双份适配；CI 中曾因 flaky 被临时跳过 cutedsl 性能测试，说明数值/性能稳定性打磨成本真实存在。</li></ul></div></section>
+      <div class="pager"><a href="ssm_状态读写融合进_chunk_fwd_h.html"><div class="lbl">上一篇</div><div class="ttl">SSM 状态读写融合进 chunk fwd_h（原地更新）</div></a><a class="right" href="fused_recurrent_decode_bv_8to32_调优.html"><div class="lbl">下一篇</div><div class="ttl">fused_recurrent decode BV 8→32 调优</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

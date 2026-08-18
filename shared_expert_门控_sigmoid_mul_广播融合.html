@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>shared expert 门控 sigmoid×mul 广播融合</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="fused_recurrent_decode_bv_8to32_调优.html">← fused_recurrent decod…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="gdn_四路输入投影融合为单_gemm.html">GDN 四路输入投影融合为单 GEMM（q… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>shared expert 门控 sigmoid×mul 广播融合</h1>
+    <div class="chips">
+      <span class="chip stage">MoE 门控</span>
+      <span class="chip plat">HIP</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">算子融合减少 launch</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe on">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>Qwen3.5 decode 的逐层小算子清理的一部分：GDN 层与 attention 层共享同一个 MoE 块结构，shared expert 门控在每层每 token 都执行，属于 launch-bound 的低算力算子。HIP 上更早落地的是 gamma RMSNorm、<code>silu_mul</code>、以及 GDN 层出口用的 <code>fused_sigmoid_mul</code>；本篇是同一思路的广播版，给 shared expert 的 <code>[N,1]→[N,H]</code> 门控用。在 HIP 上先行启用，因为这条 fork 的目标平台是 MI308。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>每层省一次 kernel launch 与一次中间张量往返；单点收益小（&lt;1% 量级），但作用于全部 48+ 层、prefill 和 decode 都生效。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>融合 kernel 只在 HIP 启用，CUDA/CPU 走 eager 路径：同一模型两套实现。</li><li>固定 BLOCK_N=BLOCK_H=128 的 tile 配置未做 autotune，极端形状（很小的 N）下浪费少量并行度。</li></ul></div></section>
+      <div class="pager"><a href="fused_recurrent_decode_bv_8to32_调优.html"><div class="lbl">上一篇</div><div class="ttl">fused_recurrent decode BV 8→32 调优</div></a><a class="right" href="gdn_四路输入投影融合为单_gemm.html"><div class="lbl">下一篇</div><div class="ttl">GDN 四路输入投影融合为单 GEMM（qkv/z/b/a）</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

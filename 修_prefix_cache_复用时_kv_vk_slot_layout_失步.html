@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>修 prefix-cache 复用时 KV/VK slot_layout 失步</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="use_hip_linear_attn_开关控制_hip_linear_attn_路径.html">← USE_HIP_LINEAR_ATTN 开…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="triton_track_kernel_消除状态回写隐形拷贝气泡.html">Triton track kernel 消… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>修 prefix-cache 复用时 KV/VK slot_layout 失步</h1>
+    <div class="chips">
+      <span class="chip stage">状态一致性</span>
+      <span class="chip plat">HIP</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">状态布局与一致性</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe on">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>VK/KV 双布局是 HIP ASM decode kernel 高性能的前提，但它要求"布局元数据"与"物理状态"在所有状态搬运路径上严格一致。初版把元数据放在 backend、与池解耦，违反了单一真相源原则——只要有任何一条池路径搬状态而不更新元数据就会 corruption。把元数据下沉进池、让它随行一起搬，是根治手段。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>无性能收益（这是 bugfix），但它是 <a href="hip_inline_asm_decode_kernel_vk_kv_惰性布局切换.html">HIP inline-ASM decode kernel + VK/KV 惰性布局切换</a> 能在带 prefix-cache 的真实负载中启用的前提——否则该优化会产错，只能关闭。这是兑现前序优化收益的必要一步。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>池的每条状态搬运路径都要额外维护一行位图更新，耦合增加；但相比自建位图的失步风险，这是正确的耦合方向（单一真相源）。</li><li>位图更新是 O(搬动槽数) 的轻量 index 写，开销可忽略。</li></ul></div></section>
+      <div class="pager"><a href="use_hip_linear_attn_开关控制_hip_linear_attn_路径.html"><div class="lbl">上一篇</div><div class="ttl">USE_HIP_LINEAR_ATTN 开关控制 HIP linear attn 路径</div></a><a class="right" href="triton_track_kernel_消除状态回写隐形拷贝气泡.html"><div class="lbl">下一篇</div><div class="ttl">Triton track kernel 消除状态回写隐形拷贝气泡</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

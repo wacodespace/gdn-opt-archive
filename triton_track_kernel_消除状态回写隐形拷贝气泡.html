@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Triton track kernel 消除状态回写隐形拷贝气泡</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="修_prefix_cache_复用时_kv_vk_slot_layout_失步.html">← 修 prefix-cache 复用时 KV…</a><a class="btn" href="index.html">总览</a><span class="btn ghost is-disabled">最晚 →</span></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>Triton track kernel 消除状态回写隐形拷贝气泡</h1>
+    <div class="chips">
+      <span class="chip stage">状态回写</span>
+      <span class="chip plat">HIP 主</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">删冗余拷贝 / 去 host 同步</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe on">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>前序优化（<a href="mtp_verify_后_mamba_状态回写向量化.html">向量化回写</a>、<a href="hip_inline_asm_decode_kernel_vk_kv_惰性布局切换.html">引入 slot_layout 位图</a>、<a href="stride_aware_kernel_重启投影融合.html">stride-aware kernel</a>）叠加后，回写与位图维护变成散落在关键路径上的多个小同步点。profile 显示这些同步造成 GPU 流水气泡。此时状态一致性语义已稳定，可以把它们合并进单个 kernel 并去掉防御性过滤。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>消除 track/回写路径上的多个 D2H 同步与隐式拷贝，GDN prefill 流不再因位图维护 stall；27B 走上连续快路径（view 而非 reshape，专用 v3 split）。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>又新增一个 split kernel 变体（v3，专为 v_per_group=3），kernel 变体持续增殖，选择逻辑更复杂。</li><li>去掉 <code>src&gt;=0</code> 过滤依赖"索引恒有效"的不变量——若上游某路径传入 pad/-1 索引会越界写；正确性护栏从代码内移到调用契约。</li><li><code>view</code> 快路径要求张量连续，判断错误会静默产错（用 <code>is_contiguous</code> 显式分流缓解）。</li></ul></div></section>
+      <div class="pager"><a href="修_prefix_cache_复用时_kv_vk_slot_layout_失步.html"><div class="lbl">上一篇</div><div class="ttl">修 prefix-cache 复用时 KV/VK slot_layout 失步</div></a><div></div></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

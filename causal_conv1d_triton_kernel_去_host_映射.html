@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>causal_conv1d Triton kernel 去 host 映射（≤9%）</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="prefill_conv1d_切换到_sgl_kernel_cuda_实现.html">← prefill conv1d 切换到 sg…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="b_sigmoid_gdn_gating_unsqueeze_三合一.html">b.sigmoid+gdn_gating+… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>causal_conv1d Triton kernel 去 host 映射（≤9%）</h1>
+    <div class="chips">
+      <span class="chip stage">conv1d</span>
+      <span class="chip plat">通用</span>
+    </div>
+    
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe on">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>Qwen3-Next GDN prefill/混合 batch 场景。旧的映射表方案是从 vLLM 移植来的通用写法，为了让 grid 恰好等于总 chunk 数；但在 SGLang 的调用频率下（每层每 chunk 一次），host 准备成本 + H2D 传输 + 同步反而成了大头。序列长度 CPU 侧本来就有（<code>extend_seq_lens_cpu</code>），所以可以免费拿到 grid 所需信息。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>causal_conv1d prefill 路径最多 <strong>9%</strong> 提速。</li><li>消除每次调用的 D2H 同步点，对 overlap scheduler / CUDA graph 友好性也有改善。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>Grid 第二维按最长序列取值：批内长度方差极大时会发射大量提前退出的空 program，浪费少量 launch 带宽（实测远小于旧方案的 host 开销）。</li><li>删除了 <code>metadata</code> 预计算路径（PrepareMambaMetadata 的 nums_dict 机制），依赖该接口的调用方需要适配（接口留了 <code>**kwargs</code> 兼容吞掉旧参数）。</li></ul></div></section>
+      <div class="pager"><a href="prefill_conv1d_切换到_sgl_kernel_cuda_实现.html"><div class="lbl">上一篇</div><div class="ttl">prefill conv1d 切换到 sgl-kernel CUDA 实现</div></a><a class="right" href="b_sigmoid_gdn_gating_unsqueeze_三合一.html"><div class="lbl">下一篇</div><div class="ttl">b.sigmoid+gdn_gating+unsqueeze 三合一（e2e ≤0.85%）</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

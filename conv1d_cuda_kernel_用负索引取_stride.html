@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>conv1d CUDA kernel 用负索引取 stride（布局无关化）</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="b_sigmoid_gdn_gating_unsqueeze_三合一.html">← b.sigmoid+gdn_gating+…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="target_verify_去两次_contiguous.html">target_verify 去两次 con… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>conv1d CUDA kernel 用负索引取 stride（布局无关化）</h1>
+    <div class="chips">
+      <span class="chip stage">conv1d</span>
+      <span class="chip plat">CUDA</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">状态布局与一致性</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe on">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>GDN 的状态池后续要演进（多层打包、VK/KV 布局等），conv_states 的外层形状会变。提前把 kernel 对 stride 的读取解耦成"只认末两维"，可以一次性避免多处未来的 shape 假设 bug。属于典型的防御式重构。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>是解锁后续 GDN 优化（packed decode、split-qkv、布局切换）的前置改动，避免了这些改动在 CUDA kernel 层踩 stride 假设的坑。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>纯正确性/可维护性改动，无性能劣化。唯一前提是调用方必须保证 conv_states 的最后两维语义固定为 (channel, length)。</li></ul></div></section>
+      <div class="pager"><a href="b_sigmoid_gdn_gating_unsqueeze_三合一.html"><div class="lbl">上一篇</div><div class="ttl">b.sigmoid+gdn_gating+unsqueeze 三合一（e2e ≤0.85%）</div></a><a class="right" href="target_verify_去两次_contiguous.html"><div class="lbl">下一篇</div><div class="ttl">target_verify 去两次 contiguous()</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

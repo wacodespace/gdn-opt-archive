@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GDN 双投影 alt-stream 并发 + 去 shared expert clone</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="融合_tp_all_reduce_与下一层_residual_rmsnorm.html">← 融合 TP all-reduce 与下一层…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="use_hip_linear_attn_开关控制_hip_linear_attn_路径.html">USE_HIP_LINEAR_ATTN 开… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>GDN 双投影 alt-stream 并发 + 去 shared expert clone</h1>
+    <div class="chips">
+      <span class="chip stage">in_proj</span>
+      <span class="chip plat">CUDA/HIP</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">算子融合减少 launch</span></div>
+    <div class="pipeline"><span class="pipe on">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>Qwen3.5 v0.5.9 decode 优化。GDN 层入口两个投影的串行发射在小 batch decode 下是纯 launch/等待开销；用 alt-stream 让 GPU 同时跑两个 kernel 是 CUDA graph 场景常见的并发填充手段。clone 去除则是延续此前 gating 融合与 verify 去 clone 系列的"删冗余拷贝"。env 开关化让不稳定的 qk-norm 双流可按需关闭，不拖累默认路径。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>GDN 双投影并发执行，窄 GEMM 的等待被大 GEMM 掩盖；shared expert 每层省一次 hidden_states clone。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>alt-stream 仅在 CUDA graph capture 模式生效；非 capture 路径回退串行。双流引入跨流同步（wait_stream），短 kernel 上同步开销会吃掉并发收益——这也是把 qk-norm 双流降级为 env 开关（默认关）的原因。</li><li>并发执行增加瞬时寄存器/SM 资源竞争，极端形状下互相拖慢。</li><li>去 clone 后 shared expert 与 router 共享输入张量，依赖两者确实只读的约定。</li></ul></div></section>
+      <div class="pager"><a href="融合_tp_all_reduce_与下一层_residual_rmsnorm.html"><div class="lbl">上一篇</div><div class="ttl">融合 TP all-reduce 与下一层 residual RMSNorm</div></a><a class="right" href="use_hip_linear_attn_开关控制_hip_linear_attn_路径.html"><div class="lbl">下一篇</div><div class="ttl">USE_HIP_LINEAR_ATTN 开关控制 HIP linear attn 路径</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>

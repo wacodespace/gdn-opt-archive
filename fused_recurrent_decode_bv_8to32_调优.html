@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fused_recurrent decode BV 8→32 调优</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><a class="brand" href="index.html"><span class="mark">G</span>GDN OPT 归档</a></div>
+  <div class="nav-btns"><a class="btn ghost" href="cute_dsl_手写_gdn_decode_kernel.html">← CuTe DSL 手写 GDN decod…</a><a class="btn" href="index.html">总览</a><a class="btn ghost" href="shared_expert_门控_sigmoid_mul_广播融合.html">shared expert 门控 sigm… →</a></div>
+</div></div>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">GDN 优化</div>
+    <h1>fused_recurrent decode BV 8→32 调优</h1>
+    <div class="chips">
+      <span class="chip stage">decode 递推</span>
+      <span class="chip plat">通用</span>
+    </div>
+    <div class="chips" style="margin-top:10px"><span class="chip">手写高性能 decode kernel</span></div>
+    <div class="pipeline"><span class="pipe">in_proj</span><span class="pipe-arrow">→</span><span class="pipe">conv1d</span><span class="pipe-arrow">→</span><span class="pipe">gating</span><span class="pipe-arrow">→</span><span class="pipe on">递推</span><span class="pipe-arrow">→</span><span class="pipe">RMSNorm</span><span class="pipe-arrow">→</span><span class="pipe">out_proj</span></div>
+  </div>
+  <div class="layout">
+    <aside class="side">
+      <h3>结构</h3>
+      <nav class="toc"><a href="#s1"><span class="n">01</span>背景</a><a href="#s2"><span class="n">02</span>收益</a><a href="#s3"><span class="n">03</span>代价</a></nav>
+    </aside>
+    <main>
+      <section class="sec s-context" id="s1"><div class="sec-head"><div class="sec-num">01</div><div><h2>优化背景</h2><div class="role">做这件事的场景和动机</div></div></div><div class="sec-body"><p>Qwen3-Next decode 的 fused_recurrent kernel 沿用了 FLA 上游的保守默认值（BV=8 是为小 head_dim/小 batch 场景保并行度设的）。在 SGLang 的实际部署形状（HV=32、V=128、大 batch）下重新审视 occupancy vs. 每 program 工作量的平衡点即可得出更优配置。</p></div></section><section class="sec s-gain" id="s2"><div class="sec-head"><div class="sec-num">02</div><div><h2>好处与收益</h2></div></div><div class="sec-body"><ul><li>GDN decode 递推 kernel 提速（机制上 program 数减 4x、q/k 复用增 4x）。</li><li>HIP / Qwen3.5 把同一思路做成 per-backend autotune：<code>fused_sigmoid_gating_recurrent</code> 上 CUDA 用 <code>BV=8, nw=1, ns=3</code>，HIP 用 <code>BV=64, nw=4, ns=1</code>；<code>chunk_o</code> 的 BV 在 HIP 上从 32 收到 16；<code>chunk_gated_delta_rule_fwd_kernel_h</code> 在 HIP 上用 <code>BK=64</code>（CDNA 的 LDS / 寄存器压力和 NV 不同）。</li></ul></div></section><section class="sec s-trade" id="s3"><div class="sec-head"><div class="sec-num">03</div><div><h2>Trade-off</h2><div class="role">正确性债、分叉和退化</div></div></div><div class="sec-body"><ul><li>极小 batch（N*HV*NV 铺不满 SM）时并行度下降 4 倍；decode 下 N*HV 通常仍够铺满。</li><li>每 program 寄存器/共享内存占用增加，单 SM 并发 program 数下降；实测在目标形状上净收益为正。</li><li>tile 形状按平台写死两套，换 GPU 世代或 head_dim 必须重测；CUDA / HIP 最优 BV 已经反向（8 vs 64）。</li></ul></div></section>
+      <div class="pager"><a href="cute_dsl_手写_gdn_decode_kernel.html"><div class="lbl">上一篇</div><div class="ttl">CuTe DSL 手写 GDN decode kernel</div></a><a class="right" href="shared_expert_门控_sigmoid_mul_广播融合.html"><div class="lbl">下一篇</div><div class="ttl">shared expert 门控 sigmoid×mul 广播融合</div></a></div>
+    </main>
+  </div>
+</div>
+
+<script>
+
+(function () {
+  const links = [...document.querySelectorAll('.toc a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function sync() {
+    let cur = secs[0];
+    for (const s of secs) {
+      if (s.getBoundingClientRect().top <= 96) cur = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (cur && cur.id)));
+  }
+  document.addEventListener('scroll', sync, {passive: true});
+  sync();
+})();
+
+</script>
+</body>
+</html>
