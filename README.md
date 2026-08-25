@@ -2,7 +2,7 @@
 
 Static HTML archive of **Gated DeltaNet (GDN)** optimizations in [SGLang](https://github.com/sgl-project/sglang).
 
-It covers the Qwen3-Next / Qwen3.5 linear-attention path on CUDA and HIP. Open [`html/index.html`](html/index.html) and start from the timeline.
+It covers Qwen3 linear-attention on CUDA and HIP. Open [`html/index.html`](html/index.html) and start from the timeline.
 
 SGLang GDN（Gated DeltaNet）优化归档：每条只写背景、收益和 trade-off。从 [`html/index.html`](html/index.html) 读。
 
